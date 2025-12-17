@@ -3,46 +3,71 @@ package main
 import (
 	"fmt"
 	"log"
-
+	"net"
 	"github.com/miekg/dns"
 )
 
-// handleDNSRequest handles every incoming DNS query
+var blockedDomains map[string]bool
+
 func handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
-	// r = incoming DNS request
-	// w = where we write the response
-
-	// Create a new DNS client to forward request
-	client := new(dns.Client)
-	client.Net = "udp"
-
-	// Forward the request to Google DNS
-	resp, _, err := client.Exchange(r, "8.8.8.8:53")
-	if err != nil {
-		log.Println("DNS forward error:", err)
+	if len(r.Question) == 0 {
 		return
 	}
 
-	// Write the response back to the original client
-	err = w.WriteMsg(resp)
-	if err != nil {
-		log.Println("DNS write error:", err)
+	q := r.Question[0]
+	domain := q.Name[:len(q.Name)-1] // remove trailing dot
+
+	// 🔴 BLOCK CHECK
+	if blockedDomains[domain] {
+		msg := new(dns.Msg)
+		msg.SetReply(r)
+
+		rr := &dns.A{
+			Hdr: dns.RR_Header{
+				Name:   q.Name,
+				Rrtype: dns.TypeA,
+				Class:  dns.ClassINET,
+				Ttl:    300,
+			},
+			A: net.ParseIP("0.0.0.0"),
+		}
+
+		msg.Answer = append(msg.Answer, rr)
+		w.WriteMsg(msg)
+
+		log.Println("BLOCKED:", domain)
+		return
 	}
+
+	// ✅ Forward allowed queries
+	client := new(dns.Client)
+	client.Net = "udp"
+
+	resp, _, err := client.Exchange(r, "8.8.8.8:53")
+	if err != nil {
+		log.Println("Forward error:", err)
+		return
+	}
+
+	w.WriteMsg(resp)
 }
 
 func main() {
-	// Attach handler to all DNS queries
+	var err error
+	blockedDomains, err = loadBlocklist("blocklist.txt")
+	if err != nil {
+		log.Fatal("Failed to load blocklist:", err)
+	}
+
+	fmt.Println("Loaded", len(blockedDomains), "blocked domains")
+
 	dns.HandleFunc(".", handleDNSRequest)
 
 	server := &dns.Server{
-		Addr: ":53", // DNS port
+		Addr: ":53",
 		Net:  "udp",
 	}
 
-	fmt.Println("DNS forwarder running on port 53")
-
-	err := server.ListenAndServe()
-	if err != nil {
-		log.Fatal("Failed to start DNS server:", err)
-	}
+	fmt.Println("Ad-blocking DNS server running on port 53")
+	log.Fatal(server.ListenAndServe())
 }
