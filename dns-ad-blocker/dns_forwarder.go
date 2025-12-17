@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"log"
 	"net"
+
 	"github.com/miekg/dns"
 )
 
 var blockedDomains map[string]bool
+var dnsCache = NewDNSCache()
 
 func handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 	if len(r.Question) == 0 {
@@ -38,6 +40,11 @@ func handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 		log.Println("BLOCKED:", domain)
 		return
 	}
+	// Check cache first
+	if cached := dnsCache.Get(domain); cached != nil {
+		w.WriteMsg(cached)
+		return
+	}
 
 	// ✅ Forward allowed queries
 	client := new(dns.Client)
@@ -48,6 +55,9 @@ func handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 		log.Println("Forward error:", err)
 		return
 	}
+
+	// Cache the response
+	dnsCache.Set(domain, resp)
 
 	w.WriteMsg(resp)
 }
