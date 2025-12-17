@@ -12,6 +12,8 @@ var blockedDomains map[string]bool
 var dnsCache = NewDNSCache()
 
 func handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
+	incTotal()
+
 	if len(r.Question) == 0 {
 		return
 	}
@@ -21,6 +23,10 @@ func handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 
 	// 🔴 BLOCK CHECK
 	if blockedDomains[domain] {
+		incBlocked()
+		recordBlocked(domain)
+		log.Println("[BLOCKED]", domain)
+
 		msg := new(dns.Msg)
 		msg.SetReply(r)
 
@@ -63,6 +69,8 @@ func handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 }
 
 func main() {
+	go startDashboard()
+
 	var err error
 	blockedDomains, err = loadBlocklist("blocklist.txt")
 	if err != nil {
@@ -72,6 +80,7 @@ func main() {
 	fmt.Println("Loaded", len(blockedDomains), "blocked domains")
 
 	dns.HandleFunc(".", handleDNSRequest)
+	
 
 	server := &dns.Server{
 		Addr: ":53",
