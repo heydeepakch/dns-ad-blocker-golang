@@ -19,10 +19,10 @@ A simple DNS-based ad blocker written in Go that blocks ad and tracking domains 
 
 ### Installation
 
-1. Navigate to the dns-ad-blocker directory:
+1. Navigate to the directory:
 
 ```
-cd dns-ad-blocker
+cd dns-ad-blocker-golang
 ```
 
 2. Run the server with admin privileges:
