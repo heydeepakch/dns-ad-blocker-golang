@@ -21,7 +21,6 @@ func handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 	q := r.Question[0]
 	domain := q.Name[:len(q.Name)-1] // remove trailing dot
 
-	// 🔴 BLOCK CHECK
 	if blockedDomains[domain] {
 		incBlocked()
 		recordBlocked(domain)
@@ -52,7 +51,7 @@ func handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 		return
 	}
 
-	// ✅ Forward allowed queries
+	// Forward allowed queries
 	client := new(dns.Client)
 	client.Net = "udp"
 
